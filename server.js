@@ -2,8 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 
-const bcrypt = require('bcrypt');
-const saltRounds = 10;
+/* const bcrypt = require('bcrypt');
+const saltRounds = 10; */
 
 const app = express();
 app.use(bodyParser.json());
@@ -42,14 +42,14 @@ app.get('/', (req, res)=> {
 });
 
 app.post('/signin', (req, res)=> {
-	bcrypt.compare(req.body.password, '$2b$10$T5oTYZQr9mBBxuZEG2I03O9uP695ZWMvP1AqlHpfaM4xyYDHYgE42', function(err, res) {
+	/* bcrypt.compare(req.body.password, '$2b$10$T5oTYZQr9mBBxuZEG2I03O9uP695ZWMvP1AqlHpfaM4xyYDHYgE42', function(err, res) {
 		console.log("first attempt", res);
 	});
 	bcrypt.compare('apple', '$2b$10$T5oTYZQr9mBBxuZEG2I03O9uP695ZWMvP1AqlHpfaM4xyYDHYgE42', function(err, res) {
 		console.log("second attempt", res);
-	});
+	}); */
 	if(req.body.email === database.users[0].email && req.body.password === database.users[0].password){
-		res.json("success");
+		res.json(database.users[0]);
 	} else {
 		res.status(400).json("error logging in");
 	}
@@ -66,9 +66,9 @@ app.post('/register', (req, res) => {
 		entries: 0,
 		joined: new Date()
 	}
-	bcrypt.hash(password, saltRounds, function(err, hash) {
+	/* bcrypt.hash(password, saltRounds, function(err, hash) {
 		console.log(hash);
-	  });
+	  }); */
 	database.users.push(newUser);
 	res.json(newUser);
 });
@@ -94,7 +94,7 @@ app.put('/image', (req, res) => {
 		if(database.users[i].id === id){
 			found = true;
 			database.users[i].entries += 1;
-			res.json(database.users[i]);
+			res.json(database.users[i].entries);
 		} 
 	}
 	if(!found){
