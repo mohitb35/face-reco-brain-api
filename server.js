@@ -1,12 +1,21 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const knex = require('knex')({
+	client: 'pg',
+	connection: {
+	  host : '127.0.0.1',
+	  user : 'mohit3',
+	  password : '',
+	  database : 'frb'
+	}
+  });
 
-/* const bcrypt = require('bcrypt');
-const saltRounds = 10; */
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json());``
 app.use(cors());
 
 const database = {
@@ -38,68 +47,102 @@ const database = {
 }
 
 app.get('/', (req, res)=> {
-	res.json(database.users);
+	// res.json(database.users);
+	knex.select().from('users').then(data => {
+		console.log(data);
+	});
 });
 
 app.post('/signin', (req, res)=> {
-	/* bcrypt.compare(req.body.password, '$2b$10$T5oTYZQr9mBBxuZEG2I03O9uP695ZWMvP1AqlHpfaM4xyYDHYgE42', function(err, res) {
-		console.log("first attempt", res);
-	});
-	bcrypt.compare('apple', '$2b$10$T5oTYZQr9mBBxuZEG2I03O9uP695ZWMvP1AqlHpfaM4xyYDHYgE42', function(err, res) {
-		console.log("second attempt", res);
-	}); */
-	if(req.body.email === database.users[0].email && req.body.password === database.users[0].password){
-		res.json(database.users[0]);
-	} else {
-		res.status(400).json("error logging in");
-	}
+	knex.select('hash', 'email').from('login')
+		.where('email','=',req.body.email)
+		.then(data => {
+			if(data.length)
+			{	
+				let { hash, email } = data[0];
+				bcrypt.compare(req.body.password, hash).then(function(result){
+					if(result){
+						return knex.select('*')
+							.from('users')
+							.where('email', '=', email)
+							.then(user => {
+								if(user.length){
+									res.json(user[0]);
+								} else {
+									res.status(400).json("Error 1. Something went wrong");
+								}
+							});
+					} else {
+						res.status(400).json("Invalid credentials. Check your email and password.");
+					}
+				})
+				.catch(err => res.status(400).json("Error 3. Something went wrong. Please try later"));
+			} else {
+				res.status(400).json("Invalid credentials. Check your email and password.");
+			}
+		})
+		.catch(err => res.status(400).json("Error 4. Something went wrong. Please try later"));
 });
 
+
 app.post('/register', (req, res) => {
-	let lastId = database.users[database.users.length-1].id;
 	let { name, email, password } = req.body;
-	let newUser = {
-		id: lastId+1,
-		name: name,
-		email: email,
-		password: password,
-		entries: 0,
-		joined: new Date()
-	}
-	/* bcrypt.hash(password, saltRounds, function(err, hash) {
-		console.log(hash);
-	  }); */
-	database.users.push(newUser);
-	res.json(newUser);
+	bcrypt.hash(password, saltRounds, function(err, hash) {
+		knex.transaction((trx) => {
+			trx.insert({
+				hash: hash,
+				email: email
+			})
+			.into('login')
+			.returning('email')
+			.then(loginEmail => {
+				return trx('users')
+					.returning('*')
+					.insert({
+						email: loginEmail[0],
+						name: name,
+						joined: new Date()
+					})
+					.then((user) => res.json(user[0]));
+			})
+			.then(trx.commit)
+			.catch((err) => {
+				trx.rollback;
+				return res.status(400).json("Could not add user");
+			})
+		})
+	})
 });
 
 app.get('/profile/:id', (req, res) => {
 	let id = Number(req.params.id);
-	let found = false;
-	for(let i=0, j=database.users.length; i<j; i++){
-		if(database.users[i].id === id){
-			found = true;
-			res.json(database.users[i]);
-		} 
-	}
-	if(!found){
-		res.status(404).send("User not found");
-	}
+	knex.select('*')
+		.from('users')
+		.where('id', id)
+		.then(user => {
+			if(user.length){
+				res.json(user[0]);
+			} else {
+				res.status(404).send("User not found");
+			}
+		})
+		.catch(err => res.status(400).send("Error getting user"));
 });
 
 app.put('/image', (req, res) => {
 	let { id } = req.body;
-	let found = false;
-	for(let i=0, j=database.users.length; i<j; i++){
-		if(database.users[i].id === id){
-			found = true;
-			database.users[i].entries += 1;
-			res.json(database.users[i].entries);
-		} 
-	}
-	if(!found){
-		res.status(404).send("User not found");
-	}
+	knex('users')
+		.where('id', '=', id)
+		.returning('entries')
+		.increment('entries', 1)
+		.then(entries => {
+			if(entries.length){
+				res.json(entries[0]);
+			} else {
+				res.status(400).json("Invalid user");
+			}
+		})
+		.catch(err => res.status(400).json("Could not increment entries"));
 });
 
 app.listen(3000, () => {
